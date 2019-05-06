@@ -1,0 +1,214 @@
+vi /etc/hosts
+#需要注意的是12c对主机名的要求比以前更加严格，不再允许出现下划线'_',只能使用连接线'-'。
+#Public IP
+192.168.18.1 node1
+192.168.18.2 node2
+
+#Private IP
+1.1.1.1 node1-priv
+1.1.1.2 node2-priv
+
+#VIP
+192.168.18.3 node1-vip
+192.168.18.4 node2-vip
+
+#Scan-IP
+192.168.18.5 scanip
+
+
+
+节点一添加3块网卡，节点二添加两块网卡
+
+
+vi /etc/sysctl.conf
+fs.aio-max-nr = 1048576
+fs.file-max = 6815744
+kernel.shmall = 10485760
+kernel.shmmax = 42949672960
+kernel.shmmni = 4096
+kernel.sem = 250 32000 100 128
+net.ipv4.ip_local_port_range = 9000 65500
+net.core.rmem_default = 262144
+net.core.rmem_max = 4194304
+net.core.wmem_default = 262144
+net.core.wmem_max = 1048576
+
+
+
+
+
+
+service iptables stop
+service ip6tables stop
+chkconfig iptables off
+chkconfig ip6tables off
+
+
+
+
+groupadd -g 501 oinstall
+groupadd -g 502 dba
+groupadd -g 503 asmadmin
+groupadd -g 504 asmdba
+groupadd -g 505 asmoper
+groupadd -g 506 oper
+useradd -u 501 -g oinstall -G asmadmin,asmdba,asmoper,dba grid
+useradd -u 502 -g oinstall -G dba,asmdba,oper oracle
+
+
+
+vim /etc/security/limits.conf
+
+oracle soft nofile 2048
+oracle hard nofile 65536
+oracle soft nproc 16384
+oracle hard nproc 16384
+oracle soft stack 10240
+oracle hard stack 32768
+oracle hard memlock 134217728
+oracle soft memlock 134217728
+grid soft nofile 2048
+grid hard nofile 65536
+grid soft nproc 16384
+grid hard nproc 16384
+grid soft stack 10240
+grid hard stack 32768
+grid hard memlock 134217728
+grid soft memlock 134217728
+
+
+
+vim /etc/pam.d/login
+session   required    pam_limits.so
+
+vim ~grid/.bash_profile
+export ORACLE_BASE=/u01/app/grid/grid_base
+export ORACLE_HOME=/u01/12.2.0/grid
+export ORACLE_SID=+ASM1/+ASM2
+export PATH=$ORACLE_HOME/bin:$ORACLE_HOME/OPatch:$PATH
+export LD_LIBRARY_PATH=$ORACLE_HOME/lib:$LD_LIBRARY_PATH
+
+
+
+vim ~oracle/.bash_profile
+export ORACLE_BASE=/u01/app/oracle
+export ORACLE_HOME=$ORACLE_BASE/product/12.2.0/db_1
+export ORACLE_SID=orcl1/orcl2
+export NLS_LANG=AMERICAN_AMERICA.AL32UTF8
+export PATH=$ORACLE_HOME/bin:$ORACLE_HOME/OPatch:$PATH
+export LD_LIBRARY_PATH=$ORACLE_HOME/lib:$LD_LIBRARY_PATH
+
+
+--两节点创建目录并设置权限
+mkdir -p /u01/app/oracle/product/12.2.0/db_1
+mkdir -p /u01/app/grid
+mkdir -p /u01/12.2.0/grid
+mkdir -p /u01/app/oraInventory
+chown -R oracle.oinstall /u01/app/oracle/
+chown -R oracle.oinstall /u01/app/oracle/*
+chown -R grid.oinstall /u01/app/grid/
+chown -R grid.oinstall /u01/app/oraInventory/
+chown -R grid.oinstall /u01/12.2.0/grid/
+
+
+
+
+
+vim /etc/scsi_id.config
+options=--whitelisted --replace-whitespace 
+
+
+for i in  c d e f
+do  
+echo "KERNEL==\"sd*\", SUBSYSTEM==\"block\", PROGRAM==\"/lib/udev/scsi_id --whitelisted --replace-whitespace --device=/dev/\$name\", RESULT==\"`/lib/udev/scsi_id --whitelisted --replace-whitespace --device=/dev/sd$i`\", NAME=\"asm-disk$i\", OWNER=\"grid\", GROUP=\"asmadmin\", MODE=\"0660\""  
+done
+
+
+vim /etc/udev/rules.d/99-oracle-asmdevices.rules
+将上述脚本呢生成文本复制udev配置文件
+将文件传到节点2，然后start_udev，节点2就能看到asm-disk
+scp /etc/udev/rules.d/99-oracle-asmdevices.rules 192.168.18.2:/etc/udev/rules.d/
+
+
+
+vmx文件
+disk.locking ="FALSE"
+disk.EnableUUID ="TRUE"
+scsi0:4.mode = "independent-persistent"
+scsi0:4.deviceType = "disk"
+scsi0:4.present = "TRUE"
+scsi0:4.fileName = "G:\vm\rac1\rac1-3.vmdk"
+
+
+
+
+
+
+
+
+
+
+/etc/init.d/ntpd stop
+chkconfig ntpd off
+mv /etc/ntp.conf /etc/ntp.conf_bak
+
+
+
+/etc/init.d/oracleasm configure
+Default user to own the driver interface []: grid
+Default group to own the driver interface []: asmadmin  
+Start Oracle ASM library driver on boot (y/n) [n]: y
+Scan for Oracle ASM disks on boot (y/n) [y]: y
+
+
+
+service oracleasm createdisk VOL1 /dev/sdb1
+service oracleasm createdisk VOLC /dev/sdc1
+service oracleasm createdisk VOLD /dev/sdd1
+service oracleasm createdisk VOLE /dev/sde1
+service oracleasm createdisk VOLF /dev/sdf1
+service oracleasm createdisk VOLG /dev/sdg1
+
+
+[root@localhost ~]# oracleasm listdisks
+VOLC
+VOLD
+VOLE
+VOLF
+
+[root@localhost ~]# oracleasm scandisks
+Reloading disk partitions: done
+Cleaning any stale ASM disks...
+Scanning system for ASM disks...
+Instantiating disk "VOLC"
+Instantiating disk "VOLD"
+Instantiating disk "VOLE"
+Instantiating disk "VOLF"
+[root@localhost ~]# 
+
+
+节点2：
+/etc/init.d/oracleasm configure
+Default user to own the driver interface []: grid
+Default group to own the driver interface []: asmadmin  
+Start Oracle ASM library driver on boot (y/n) [n]: y
+Scan for Oracle ASM disks on boot (y/n) [y]: y
+oracleasm listdisks
+
+
+
+chown oracle.oinstall linuxx64_12201_database.zip
+su - oracle
+unzip linuxx64_12201_database.zip
+cd database/sshsetup/
+./sshUserSetup.sh -user oracle -hosts "node1 node2" -advanced -noPromptPassphrase
+./sshUserSetup.sh -user grid -hosts "node1 node2" -advanced -noPromptPassphrase
+
+-最后在节点1使用oracle和grid用户都执行以下两条命令验证互信：
+$ ssh node2 date
+$ ssh node2-priv date
+
+
+
+oracle rac 节点2
+https://community.oracle.com/thread/3759331
