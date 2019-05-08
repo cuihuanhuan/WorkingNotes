@@ -1,3 +1,22 @@
+参考：http://www.cnblogs.com/leohahah/p/9488963.html
+
+
+iscsi-target共享存储不难
+唯一的问题在oracleasm create disk VOLB /dev/sdb1之后
+Oracle rac节点1安装grid，asm磁盘选择，查找路径应写/dev/oracleasm/disks/*才能找到共享盘。
+12.2这步之后安装很顺
+
+局域网安装oracle，有关域名解析，resolve.conf dns的报错都可以忽略
+
+
+需要网卡的只有私网IP和公网IP VIP和Scanip都是虚拟IP 共用public IP网卡的
+只有私网IP和公网IP需要手动到网卡配置文件里加  其他全由RAC自动加
+你共享出来的磁盘还是可以用oracleasm创建的，这样你路径就可以去/dev/oracleasm下面找，权限也会给你改好，不用自己改了
+
+Rac监听是集群服务的一种 不用手动配
+
+
+
 vi /etc/hosts
 #需要注意的是12c对主机名的要求比以前更加严格，不再允许出现下划线'_',只能使用连接线'-'。
 #Public IP
@@ -32,7 +51,7 @@ net.core.rmem_default = 262144
 net.core.rmem_max = 4194304
 net.core.wmem_default = 262144
 net.core.wmem_max = 1048576
-
+kernel.panic_on_oops=1
 
 
 
@@ -114,11 +133,18 @@ chown -R grid.oinstall /u01/12.2.0/grid/
 
 
 
+/etc/init.d/ntpd stop
+chkconfig ntpd off
+mv /etc/ntp.conf /etc/ntp.conf_bak
+
+
+
+
 vim /etc/scsi_id.config
 options=--whitelisted --replace-whitespace 
 
 
-for i in  c d e f
+for i in  c d e f 
 do  
 echo "KERNEL==\"sd*\", SUBSYSTEM==\"block\", PROGRAM==\"/lib/udev/scsi_id --whitelisted --replace-whitespace --device=/dev/\$name\", RESULT==\"`/lib/udev/scsi_id --whitelisted --replace-whitespace --device=/dev/sd$i`\", NAME=\"asm-disk$i\", OWNER=\"grid\", GROUP=\"asmadmin\", MODE=\"0660\""  
 done
@@ -131,27 +157,8 @@ scp /etc/udev/rules.d/99-oracle-asmdevices.rules 192.168.18.2:/etc/udev/rules.d/
 
 
 
-vmx文件
-disk.locking ="FALSE"
-disk.EnableUUID ="TRUE"
-scsi0:4.mode = "independent-persistent"
-scsi0:4.deviceType = "disk"
-scsi0:4.present = "TRUE"
-scsi0:4.fileName = "G:\vm\rac1\rac1-3.vmdk"
 
-
-
-
-
-
-
-
-
-
-/etc/init.d/ntpd stop
-chkconfig ntpd off
-mv /etc/ntp.conf /etc/ntp.conf_bak
-
+参考ISCSI-Target共享存储配置
 
 
 /etc/init.d/oracleasm configure
@@ -162,7 +169,7 @@ Scan for Oracle ASM disks on boot (y/n) [y]: y
 
 
 
-service oracleasm createdisk VOL1 /dev/sdb1
+service oracleasm createdisk VOLB /dev/sdb1
 service oracleasm createdisk VOLC /dev/sdc1
 service oracleasm createdisk VOLD /dev/sdd1
 service oracleasm createdisk VOLE /dev/sde1
@@ -208,7 +215,18 @@ cd database/sshsetup/
 $ ssh node2 date
 $ ssh node2-priv date
 
+iscsi-target共享,asm磁盘组选择,需要设置查找路径为：/dev/oracleasm/disks/*
+ls /dev/oracleasm/disks/*
+不是/dev/*
 
 
-oracle rac 节点2
+oralce12.1 rac安装，节点2执行root.sh脚本报错
+继续安装，重启节点1，节点2执行root.sh脚本就没报错。
+
+
+网上答案：
 https://community.oracle.com/thread/3759331
+This problem has been resolved with the help of Oracle. It was due to some new bugs in root.sh script and oracle provided hot fix for it.
+
+reboot节点1,该问题解决，但是reboot节点，只安装了节点1导致节点2的集群未安装。
+所以该办法只是找到root.sh报错原因和rac1的一些服务有关。不能解决问题。
