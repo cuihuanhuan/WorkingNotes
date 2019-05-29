@@ -1,1 +1,9 @@
-
+物理存储结构:
+Data files and temp files;
+Control files
+Online redo log files
+逻辑存储结构:
+Tablespace
+Segemnt
+Extent
+Oracle data block
