@@ -12,7 +12,7 @@ useradd -u 1002 -g oinstall -G dba,asmdba,oper oracle
 echo 'oracle' | passwd --stdin grid
 echo 'oracle' | passwd --stdin oracle
 
-echo '192.168.62.102 asm'>>/etc/hosts
+
 
 echo 'fs.aio-max-nr = 1048576'>>/etc/sysctl.conf 
 echo 'fs.file-max = 6815744'>>/etc/sysctl.conf 

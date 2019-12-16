@@ -1,0 +1,31 @@
+参考文档：https://www.cnblogs.com/yy-cola/p/9637437.html
+python的pywinrm模块远程连接windows执行dos命令
+----A机器远程连接B----
+在A机器上安装模块：
+pip install pywinrm
+在B机器上配置winrm服务的相关配置，使其支持远程控制：
+（winrm服务是windows 一种方便远程管理的服务；开启winrm service,便于在日常工作中，远程管理服务器，或通过脚本，同时管理多台服务器，来提高工作效率；）
+无脑配置如下：
+
+winrm service 的基础配置，执行之后提示选择的时候选中y：
+winrm quickconfig
+
+查看winrm service listener（分为http和https）:
+winrm e winrm/config/listener
+
+为winrm service 配置auth:
+winrm set winrm/config/service/auth @{Basic="true"}
+
+为winrm service 配置加密方式为允许非加密：
+winrm set winrm/config/service @{AllowUnencrypted="true"}
+
+
+查看winrm服务的配置：
+winrm get winrm/config
+
+ 
+简单的连接：
+import winrm
+wintest = winrm.Session('http://B主机的ip地址:5985/wsman',auth=('administrator','abc123!'))
+ret = wintest.run_cmd('ipconfig')
+print(ret)
